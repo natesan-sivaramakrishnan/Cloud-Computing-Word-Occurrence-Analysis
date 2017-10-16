@@ -1,0 +1,268 @@
+====Step by Step Instructions to Create own hadoop AMI starting from Amazon Linux AMI======
+*******************************************************************************************
+Submitted By: Natesan Sivaramakrishnan
+ucid: ns632
+
+Image name: sivaramakrishnan-hadoop-ami-001
+Description: sivaramakrishnan-ns632-Hadoop AMI created from Amazon Linux AMI
+AMI ID: ami-d95996a3
+Snapshot ID: snap-0d8a8ad454059eef9
+Permissions: Public
+
+Java Verison installed:
+openjdk version "1.8.0_141"
+OpenJDK Runtime Environment (build 1.8.0_141-b16)
+OpenJDK 64-Bit Server VM (build 25.141-b16, mixed mode)
+
+Hadoop Version installed:
+Hadoop 2.8.1
+Subversion https://git-wip-us.apache.org/repos/asf/hadoop.git -r 20fe5304904fc2f5a18053c389e43cd26f7a70fe
+Compiled by vinodkv on 2017-06-02T06:14Z
+Compiled with protoc 2.5.0
+From source with checksum 60125541c2b3e266cbf3becc5bda666
+This command was run using /usr/local/hadoop/share/hadoop/common/hadoop-common-2.8.1.jar
+*******************************************************************************************
+
+1. Login to AWS console
+2. Navigate to EC2 Dashboard
+3. Select 'Launch Instance'
+4. Step 1: Choose an AMI - Select Amazon Linux AMI 2017.09.0 (ami-8c1be5f6)
+5. Step 2: Choose an Instance Type - Select t2.micro
+6. Step 3: Configure Instance Details - No. of Instances:1 (Others: default settings)
+7. Step 4: Add Storage - Default storage 8GB
+8. Step 5: Add Tags - Add tag Key:Name Value:java-hadoop-ami
+9. Step 6: Configure Security Group - Default Access, SSH Anywhere, All TCP, All UDP
+10. Step 7: Review and Launch
+11. Step 8: Launch 
+
+EC2 Instance Public DNS: ec2-34-233-136-154.compute-1.amazonaws.com
+
+EC2 Instance Key: java-hadoop.pem
+
+12. Open a terminal in local machine
+user@local:~$ sudo chmod 400 ~/.ssh/java-hadoop.pem
+
+13. LOGGING IN EC2
+Using the downloaded Key.pem log in to EC2 Instance
+user@local:~$ ssh -i ~/.ssh/java-hadoop.pem ec2-user@ec2-34-233-136-154.compute-1.amazonaws.com
+
+14. Check for any package update and upgrades
+[ec2-user@ip ~]$ sudo yum update
+[ec2-user@ip ~]$ sudo yum upgrade
+
+15. INSTALLING JAVA
+Grep to find the latest available java package
+[ec2-user@ip ~]$ sudo yum list | grep -i "java-.*openjdk-devel"
+
+installing latest java package java-1.8.0
+[ec2-user@ip ~]$ sudo yum install java-1.8.0-openjdk-devel.x86_64
+
+update all the packages
+[ec2-user@ip ~]$ sudo yum update
+
+to set up the latest verison of java change to root user
+[ec2-user@ip ~]$ sudo su root
+[root@ip ec2-user]# cd
+[root@ip ~]# alternatives --config java
+
+selection number: 2
+
+[root@ip ~]# exit
+
+Check the java-version
+[ec2-user@ip ~]$ java -version
+
+16. Hadoop uses SSH (to access it nodes), therefore need to configure SSH access to namenode
+[ec2-user@ip ~]$ ssh-keygen -t rsa -P ""
+
+Add the newly created key to the list of authorized keys so that Hadoop can use SSH without promting for a password
+
+[ec2-user@ip ~]$ cat $HOME/.ssh/id_rsa.pub >> $HOME/.ssh/authorized_keys
+
+17. Since Hadoop doesn't work on IPv6, we should disable it, for that update /etc/sysctl.conf
+[ec2-user@ip ~]$ sudo vim /etc/sysctl.conf
+
+Add the following to the sysctl.conf file
+# disable ipv6
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+net.ipv6.conf.lo.disable_ipv6 = 1
+
+save the file and exit (:wq!)
+
+18. Reboot machine
+[ec2-user@ip ~]$ sudo reboot
+
+19. INSTALLING HADOOP
+After reboot Download latest Apache Hadoop source from Apache mirrors
+
+[ec2-user@ip ~]$ wget http://mirror.jax.hugeserver.com/apache/hadoop/common/hadoop-2.8.1/hadoop-2.8.1.tar.gz
+
+Unpack the .tar.gz file usinh tar command
+[ec2-user@ip ~]$ sudo tar -zxvf hadoop-2.8.1.tar.gz
+
+Use root user to move the .tar.gz file to /usr/local/hadoop
+[ec2-user@ip ~]$ sudo su root
+[root@ip ec2-user]# mv hadoop-2.8.1 /usr/local/hadoop
+[root@ip ec2-user]# exit
+
+20. Assign ownership og hadoop folder to EC2 user
+[ec2-user@ip ~]$ sudo chown ec2-user:wheel -R /usr/local/hadoop
+
+21. Create Hadoop Temp directories for Namenode and Datanode
+[ec2-user@ip ~]$ sudo mkdir -p /usr/local/hadoop_tmp/hdfs/namenode
+[ec2-user@ip ~]$ sudo mkdir -p /usr/local/hadoop_tmp/hdfs/datanode
+
+22. Again Assign ownership of the folder to ec2-user
+[ec2-user@ip ~]$ sudo chown ec2-user:wheel -R /usr/local/hadoop_tmp/
+
+23. Now, setting up environmental variables in .bashrc file
+[ec2-user@ip ~]$ sudo vim .bashrc
+
+Add the following at the end of the .bashrc file
+# -- HADOOP ENVIRONMENT VARIABLES START -- #
+export JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk.x86_64
+export HADOOP_HOME=/usr/local/hadoop
+export PATH=$PATH:$HADOOP_HOME/bin
+export PATH=$PATH:$HADOOP_HOME/sbin
+export HADOOP_MAPRED_HOME=$HADOOP_HOME
+export HADOOP_COMMON_HOME=$HADOOP_HOME
+export HADOOP_HDFS_HOME=$HADOOP_HOME
+export YARN_HOME=$HADOOP_HOME
+export HADOOP_COMMON_LIB_NATIVE_DIR=$HADOOP_HOME/lib/native
+export HADOOP_OPTS="-Djava.library.path=$HADOOP_HOME/lib"
+export PATH=$PATH:/usr/local/hadoop/bin/
+# -- HADOOP ENVIRONMENT VARIABLES END -- #
+
+Save the file and exit
+
+24. Next, configure hadoop-env.sh
+[ec2-user@ip ~]$ cd /usr/local/hadoop/etc/hadoop
+[ec2-user@ip hadoop]$ sudo vim hadoop-env.sh
+
+25. Update the JAVA_HOME path in the hadoop-env.sh file
+export JAVA_HOME='/usr/lib/jvm/java-1.8.0-openjdk.x86_64'
+
+save the file and exit
+
+26. Configuration of core-site.xml file
+core-site.xml contains configuration information that overrides the default values for core Hadoop properties
+[ec2-user@ip hadoop]$ sudo vim core-site.xml 
+
+Update the following in core-site.xml
+<configuration>
+<property>
+<name>fs.default.name</name>
+<value>hdfs://localhost:9000</value>
+</property>
+</configuration>
+
+save the file and exit
+
+27. Configuration of hdfs-site.xml
+[ec2-user@ip hadoop]$ sudo vim hdfs-site.xml
+
+Update the following in hdfs-site.xml
+<configuration>
+<property>
+<name>dfs.replication</name>
+<value>1</value>
+</property>
+<property>
+<name>dfs.namenode.name.dir</name>
+<value>file:/usr/local/hadoop_tmp/hdfs/n­amenode</value>
+</property>
+<property>
+<name>dfs.datanode.data.dir</name>
+<value>file:/usr/local/hadoop_tmp/hdfs/datanode</value>
+</property>
+</configuration>
+
+save the file and exit
+
+28. Configuration of yarn-site.xml
+[ec2-user@ip hadoop]$ sudo vim yarn-site.xml
+
+Update the following in yarn-site.xml
+<configuration>
+<property>
+<name>yarn.nodemanager.aux-services</name>
+<value>mapreduce_shuffle</value>
+</property>
+<property>
+<name>yarn.nodemanager.aux-services.mapreduce.shuffle.class</name>
+<value>org.apache.hadoop.mapred.ShuffleHandler</value>
+</property>
+</configuration>
+
+save the file and exit
+
+29. Create the mapred-site.xml file from the mapred-site.xml.template
+[ec2-user@ip hadoop]$ cp /usr/local/hadoop/etc/hadoop/mapred-site.xml.template /usr/local/hadoop/etc/hadoop/mapred-site.xml 
+
+30. Configuration of mapred-site.xml
+[ec2-user@ip hadoop]$ sudo vim mapred-site.xml
+
+Update the following in mapred-site.xml
+<configuration>
+<property>
+<name>mapreduce.framework.name</name>
+<value>yarn</value>
+</property>
+</configuration>
+
+save the file and exit
+
+[ec2-user@ip hadoop]$ cd
+
+31. Prepare to start the Hadoop cluster by formatting the Namenode
+[ec2-user@ip ~]$ hdfs namenode -format
+
+
+[ec2-user@ip ~]$ cd /usr/local/hadoop
+
+32. Start hdfs daemons/services
+[ec2-user@ip hadoop]$ start-dfs.sh
+
+33. Start mapreduce daemon/services
+[ec2-user@ip hadoop]$ start-yarn.sh
+
+34. To check if all the services are running usr 'jps' command
+[ec2-user@ip hadoop]$ jps
+3729 NodeManager
+3281 DataNode
+3944 Jps
+3483 SecondaryNameNode
+3630 ResourceManager
+3151 NameNode
+
+35: Check system status 
+http://ec2-34-233-136-154.compute-1.amazonaws.com:8088
+
+36: View System Overview and file system
+http://ec2-34-233-136-154.compute-1.amazonaws.com:50070
+
+37. Now, go back to EC2 Dashboard
+Select the java-hadoop-ami EC2 Instance and Stop it
+Actions -> Instance state -> Stop
+
+38. Creating Instance Image
+After the instance is stopped, select the instance and create an Instance Image
+Actions -> Image -> Create Image
+Image name: sivaramakrishnan-hadoop-ami-001
+Description: sivaramakrishnan-ns632-Hadoop AMI created from Amazon Linux AMI
+Settings: Default
+Click 'Create Image'
+
+AMI ID: ami-d95996a3
+Snapshot ID: snap-0d8a8ad454059eef9
+
+39. Make the AMI permissions Public
+Select the AMI
+Actions -> Modify Image Permissions -> Public -> Save
+
+40. Now, Hadoop AMI is created starting Amazon Linux AMI and available public.
+
+
+
+********************End of Document********************************************************
